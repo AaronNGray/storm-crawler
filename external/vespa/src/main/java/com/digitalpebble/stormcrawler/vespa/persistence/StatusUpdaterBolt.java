@@ -82,10 +82,12 @@ public class StatusUpdaterBolt extends AbstractStatusUpdaterBolt
 		boolean useCompression = ConfUtils.getBoolean(stormConf, "vespa.compression", false);
 		String hostname = ConfUtils.getString(stormConf, "vespa.host", "localhost");
 		int port = ConfUtils.getInt(stormConf, "vespa.port", 4080);
+		int clientQueueSize = ConfUtils.getInt(stormConf, "vespa.client.queue.size", 10000);
+		int throttlerMinSize = ConfUtils.getInt(stormConf, "vespa.throttler.min.size", 0);
 
 		Endpoint endpoint = Endpoint.create(hostname, port, false);
-		SessionParams sessionParams = new SessionParams.Builder()
-				.addCluster(new Cluster.Builder().addEndpoint(endpoint).build())
+		SessionParams sessionParams = new SessionParams.Builder().setClientQueueSize(clientQueueSize)
+				.setThrottlerMinSize(throttlerMinSize).addCluster(new Cluster.Builder().addEndpoint(endpoint).build())
 				.setConnectionParams(new ConnectionParams.Builder().setUseCompression(useCompression).build())
 				.setFeedParams(new FeedParams.Builder().setDataFormat(FeedParams.DataFormat.JSON_UTF8).build()).build();
 		this.feedClient = FeedClientFactory.create(sessionParams, this);
