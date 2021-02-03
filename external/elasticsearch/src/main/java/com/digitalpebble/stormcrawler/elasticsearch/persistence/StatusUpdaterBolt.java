@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.storm.metric.api.MultiCountMetric;
+import org.apache.storm.metric.api.ReducedMetric;
 import org.apache.storm.task.OutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.tuple.Tuple;
@@ -47,6 +48,7 @@ import com.digitalpebble.stormcrawler.elasticsearch.ElasticSearchConnection;
 import com.digitalpebble.stormcrawler.persistence.AbstractStatusUpdaterBolt;
 import com.digitalpebble.stormcrawler.persistence.Status;
 import com.digitalpebble.stormcrawler.util.ConfUtils;
+import com.digitalpebble.stormcrawler.util.PerSecondReducer;
 import com.digitalpebble.stormcrawler.util.URLPartitioner;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
@@ -91,6 +93,9 @@ public class StatusUpdaterBolt extends AbstractStatusUpdaterBolt implements
     private Cache<String, List<Tuple>> waitAck;
 
     private MultiCountMetric eventCounter;
+    
+	private ReducedMetric perSecMetrics;
+
 
     public StatusUpdaterBolt() {
         super();
@@ -154,6 +159,9 @@ public class StatusUpdaterBolt extends AbstractStatusUpdaterBolt implements
 
         this.eventCounter = context.registerMetric("counters",
                 new MultiCountMetric(), 30);
+        
+		this.perSecMetrics = context.registerMetric("sent_average_persec", new ReducedMetric(new PerSecondReducer()),
+				60);
     }
 
     @Override
@@ -277,6 +285,7 @@ public class StatusUpdaterBolt extends AbstractStatusUpdaterBolt implements
         synchronized (waitAck) {
             while (bulkitemiterator.hasNext()) {
                 BulkItemResponse bir = bulkitemiterator.next();
+        		this.perSecMetrics.update(1);
                 itemcount++;
                 String id = bir.getId();
                 BulkItemResponse.Failure f = bir.getFailure();
@@ -337,6 +346,7 @@ public class StatusUpdaterBolt extends AbstractStatusUpdaterBolt implements
             Iterator<DocWriteRequest<?>> itreq = request.requests().iterator();
             while (itreq.hasNext()) {
                 DocWriteRequest bir = itreq.next();
+        		this.perSecMetrics.update(1);
                 String id = bir.id();
                 List<Tuple> xx = waitAck.getIfPresent(id);
                 if (xx != null) {
